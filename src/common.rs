@@ -49,7 +49,8 @@ pub fn check_alive_neighbors(grid: &Array2D<i32>, row: usize, col: usize) -> i32
 /**
  * Displays the grid in the console, with alive cells represented by "*" and dead cells represented by " ".
  */
-pub fn display_grid(grid: &Array2D<i32>, grid_size: usize) {
+pub fn display_grid(grid: &Array2D<i32>, grid_size: usize, generation: i32) {
+    println!("Generation: {}", generation);
     for row in 0..grid_size {
         for col in 0..grid_size {
             print!( "{}", match grid.get(row, col) {
