@@ -2,21 +2,36 @@
 
 <div style="text-align: center;"><h3>A collection of my personal experiments on Cell Simulations through Rust</h3></div>
 
-#### **Features**
+#### **Key Features**
 
 - Built in Graphical Rendering through Vello.
 - Terminal Rendering as backup.
-- Rulesets Targeting Conway's Game of Life for now. More to come as I experiment more.
+
+#### **Supported Rulesets**
+
+- Conway's Game of Life
+- Life Without Death
 
 #### **Roadmap**
 
 - GUI is still shakey and needs work.
 - I also want to add statistical info to the GUI with time.
 - Explore New Rulesets.
-- Add More Advanced features to see what happens. (Super Cells? Cell Powerups?)
-- Idk bro I'll figure it out as a I go.
+    - Day and Night (Symmetric)
+    - Seeds
+    - Brian's Brain?
 
 #### **Notes/Questions About CA**
 
 - Does the existence of Cellular Automata imply that even if events are deterministic, free will can still exist? I.E. We know that by the rules of Conway's Game of life, a set amount of things will always happen. Although this is true, random situations continue to happen. If this holds true for our cellular simulation, does it also hold true for our universe?
 - Does the existence of Cellular Automata strengthen the claim that we might be living in a massive simulation?
+
+#### **Resources**
+
+- [CA Ruleset Dictionary](https://web.archive.org/web/20090210151850/http://psoup.math.wisc.edu/mcell/rullex_life.html)
+- [Wikipedia CA Ruleset Dictionary](https://en.wikipedia.org/wiki/Category:Cellular_automaton_rules)
+- [LifeWiki](https://conwaylife.com/wiki/)
+
+#### **Photos**
+
+![Capture from a Conway's GOL Run](image-1.png)

@@ -6,15 +6,17 @@ use Cellular_Automata::run_renderer;
 
 use crate::common::initialize_grid;
 use crate::conway_ruleset::simulate_conway_generation;
+use crate::LwoD_ruleset::simulate_lwod_generation;
 
 mod common;
 mod conway_ruleset;
+mod LwoD_ruleset;
 
 const GRID_SIZE: usize = 50;
 const GENERATION_DELAY_MS: u64 = 500;
 
 fn main() {
-    let initial_grid = initialize_grid(GRID_SIZE);
+    let initial_grid = initialize_grid(GRID_SIZE, 0);
     let (sender, receiver) = mpsc::channel();
     let mut grid = initial_grid.clone();
     let mut gen_births: i32 = 0;
