@@ -15,3 +15,8 @@
 - Explore New Rulesets.
 - Add More Advanced features to see what happens. (Super Cells? Cell Powerups?)
 - Idk bro I'll figure it out as a I go.
+
+#### **Notes/Questions About CA**
+
+- Does the existence of Cellular Automata imply that even if events are deterministic, free will can still exist? I.E. We know that by the rules of Conway's Game of life, a set amount of things will always happen. Although this is true, random situations continue to happen. If this holds true for our cellular simulation, does it also hold true for our universe?
+- Does the existence of Cellular Automata strengthen the claim that we might be living in a massive simulation?

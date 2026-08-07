@@ -1,7 +1,10 @@
+// Conway's Game of Life ruleset implementation
+// https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
+
 use array2d::{Array2D, Error};
 use crate::common::{check_alive_neighbors};
 
-pub fn simulate_conway_generation(grid: &Array2D<i32>, grid_size: usize) -> Array2D<i32> {
+pub fn simulate_conway_generation(grid: &Array2D<i32>, grid_size: usize) -> (Array2D<i32>, i32, i32) {
 
     let mut new_grid = Array2D::filled_with(0, grid_size, grid_size);
 
@@ -35,6 +38,6 @@ pub fn simulate_conway_generation(grid: &Array2D<i32>, grid_size: usize) -> Arra
 
     println!("Births: {}, Deaths: {}", births, deaths);
 
-    new_grid
+    (new_grid, births, deaths)
 
 }

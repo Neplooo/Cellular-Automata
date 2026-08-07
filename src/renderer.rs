@@ -6,7 +6,7 @@
 use anyhow::Result;
 use array2d::Array2D;
 use std::sync::{mpsc::Receiver, Arc};
-use vello::kurbo::{Affine, Circle, Ellipse, Line, RoundedRect, Rect, Stroke};
+use vello::kurbo::{Affine, Rect};
 use vello::peniko::Color;
 use vello::peniko::color::palette;
 use vello::util::{RenderContext, RenderSurface};
@@ -14,10 +14,12 @@ use vello::{AaConfig, Renderer, RendererOptions, Scene};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 
 use vello::wgpu::{self, CurrentSurfaceTexture};
+
+const TILE_SIZE: f64 = 20.0;
 
 #[derive(Debug)]
 enum RenderState {
@@ -62,7 +64,9 @@ impl ApplicationHandler for SimpleVelloApp {
         // Get the winit window cached in a previous Suspended event or else create a new window
         let window = cached_window
             .take()
-            .unwrap_or_else(|| create_winit_window(event_loop));
+            .unwrap_or_else(|| {
+                create_winit_window(event_loop, self.grid.row_len(), self.grid.column_len())
+            });
 
         // Create a vello Surface
         let size = window.inner_size();
@@ -176,7 +180,9 @@ impl ApplicationHandler for SimpleVelloApp {
                             base_color: palette::css::BLACK, // Background color
                             width,
                             height,
-                            antialiasing_method: AaConfig::Msaa16,
+                            // The grid consists of axis-aligned rectangles; area AA is
+                            // substantially cheaper than 16x MSAA here.
+                            antialiasing_method: AaConfig::Area,
                         },
                     )
                     .expect("failed to render to surface");
@@ -218,7 +224,6 @@ impl ApplicationHandler for SimpleVelloApp {
                 // Queue the texture to be presented on the surface
                 surface_texture.present();
 
-                device_handle.device.poll(wgpu::PollType::Poll).unwrap();
             }
             _ => {}
         }
@@ -241,6 +246,10 @@ pub fn run_renderer(
 
     // Create and run a winit event loop
     let event_loop = EventLoop::new()?;
+    // The simulator sends snapshots from another thread. Polling ensures the
+    // renderer checks the receiver promptly instead of sleeping until another
+    // OS window event wakes winit.
+    event_loop.set_control_flow(ControlFlow::Poll);
     event_loop
         .run_app(&mut app)
         .expect("Couldn't run event loop");
@@ -248,11 +257,18 @@ pub fn run_renderer(
 }
 
 /// Helper function that creates a Winit window and returns it (wrapped in an Arc for sharing between threads)
-fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
+fn create_winit_window(
+    event_loop: &ActiveEventLoop,
+    rows: usize,
+    columns: usize,
+) -> Arc<Window> {
+    let width = columns as f64 * TILE_SIZE;
+    let height = rows as f64 * TILE_SIZE;
+
     let attr = Window::default_attributes()
-        .with_inner_size(LogicalSize::new(1044, 800))
+        .with_inner_size(LogicalSize::new(width, height))
         .with_resizable(true)
-        .with_title("Vello Shapes");
+        .with_title("Cellular Automata");
     Arc::new(event_loop.create_window(attr).unwrap())
 }
 
@@ -266,29 +282,20 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
 }
 
 fn draw_grid(scene: &mut Scene, grid: &Array2D<i32>){
+    let alive_color = Color::new([0.0, 1.0, 0.0, 1.0]);
 
     for row in 0..grid.row_len() {
         for col in 0..grid.column_len() {
-            let x = col as f64 * 20.0;
-            let y = row as f64 * 20.0;
-            let rect = Rect::new(x, y, x + 20.0, y + 20.0);
-            let rect_fill_color = match grid.get(row, col) {
-                Some(1) => Color::new([0.0, 1.0, 0.0, 1.0]), // Alive cells are White
-                _ => Color::new([1.0, 0.0, 0.0, 1.0]) // Dead cells are black
-            };
-            //Color::new([1.0, 1.0, 1.0, 1.0]);
-            scene.fill(
-                vello::peniko::Fill::NonZero,
-                Affine::IDENTITY,
-                rect_fill_color,
-                None,
-                &rect,
-            );
+            if grid.get(row, col) != Some(&1) {
+                continue;
+            }
+
+            let x = col as f64 * TILE_SIZE;
+            let y = row as f64 * TILE_SIZE;
+            let rect = Rect::new(x, y, x + TILE_SIZE, y + TILE_SIZE);
+
+            scene.fill(vello::peniko::Fill::NonZero, Affine::IDENTITY,
+                alive_color, None, &rect);
         }
     }
-    /*let stroke = Stroke::new(1.0);
-    let rect = RoundedRect::new(10.0, 10.0, 20.0, 20.0, 0.0);
-    let rect_stroke_color = Color::new([1., 1., 1., 1.]);
-    scene.stroke(&stroke, Affine::IDENTITY, rect_stroke_color, None, &rect);*/
-
 }
