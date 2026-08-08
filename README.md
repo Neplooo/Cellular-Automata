@@ -10,7 +10,14 @@
 #### **Supported Rulesets**
 
 - Conway's Game of Life
+    - The OG.
+    - Lots of different patterns/shapes that pop up.
 - Life Without Death
+    - Ends quickly on a random matrix.
+    - Concept of laddering exists where cells branch out in a direction until they hit another ladder.
+- Seeds
+    - Seems to run in perpetuity when starting on a dense board.
+    - Difficult for patterns to pop up by random chance.
 
 #### **Roadmap**
 
@@ -18,7 +25,6 @@
 - I also want to add statistical info to the GUI with time.
 - Explore New Rulesets.
     - Day and Night (Symmetric)
-    - Seeds
     - Brian's Brain?
 
 #### **Notes/Questions About CA**
