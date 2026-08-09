@@ -44,4 +44,6 @@
 
 #### **Photos**
 
-![Capture from a Conway's GOL Run](image-1.png)
+![Capture from a Conway's GOL Run](Media/image-1.png)
+
+![A Run of Modified Brian's Brain](Media/CA-Brain.gif)
