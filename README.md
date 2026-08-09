@@ -9,7 +9,10 @@
 #### **Key Features**
 
 - Built in Graphical Rendering through Vello.
+    - Zooming through Mouse Wheel.
+    - Panning with left-click.
 - Terminal Rendering as backup.
+- Terminal Statistics on cell deaths and births.
 
 #### **Supported Rulesets**
 
@@ -22,6 +25,9 @@
 - Seeds
     - Seems to run in perpetuity when starting on a dense board.
     - Difficult for patterns to pop up by random chance.
+- Brian's Brain
+    - One of the most famous multi-state Cellular Automata Rulesets.
+    - Allows for beautiful cascading patterns that expand forever until they hit a wall.
 
 #### **Roadmap**
 
@@ -29,7 +35,6 @@
 - I also want to add statistical info to the GUI with time.
 - Explore New Rulesets.
     - Day and Night (Symmetric)
-    - Brian's Brain?
 
 #### **Notes/Questions About CA**
 
