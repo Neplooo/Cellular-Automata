@@ -1,6 +1,10 @@
+<div align="center">
+
 <div style="text-align: center;"><h1>Neplo's Cellular Automata</h1></div>
 
 <div style="text-align: center;"><h3>A collection of my personal experiments on Cell Simulations through Rust</h3></div>
+
+</div>
 
 #### **Key Features**
 

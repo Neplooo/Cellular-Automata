@@ -1,11 +1,13 @@
-// Copyright 2024 the Vello Authors
-// SPDX-License-Identifier: Apache-2.0 OR MIT
+// Note that this renderer was about 85% Coded through A.I. Assistance.
+// This renderer was not the goal of this project, and thus, I did not waste time
+// Trying to troubleshoot it. Much of the base-level code also came from the Vello
+// Developers. Originally, this was a part of the Simple Drawings Template.
 
-//! Simple example.
+// Much Love, Alberto
 
 use anyhow::Result;
 use array2d::Array2D;
-use std::sync::{mpsc::Receiver, Arc};
+use std::sync::{Arc, mpsc::Receiver};
 use vello::kurbo::{Affine, Rect};
 use vello::peniko::Color;
 use vello::peniko::color::palette;
@@ -13,13 +15,25 @@ use vello::util::{RenderContext, RenderSurface};
 use vello::{AaConfig, Renderer, RendererOptions, Scene};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 
 use vello::wgpu::{self, CurrentSurfaceTexture};
 
 const TILE_SIZE: f64 = 20.0;
+const INITIAL_TILE_SIZE: f64 = TILE_SIZE * 1.5;
+const MIN_TILE_SIZE: f64 = 2.0;
+const MAX_TILE_SIZE: f64 = 100.0;
+const ZOOM_FACTOR: f64 = 1.1;
+const MAX_INITIAL_WINDOW_USAGE: f64 = 0.75;
+
+/// The cellular automaton ruleset whose state is being rendered.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Ruleset {
+    Conway,
+    BriansBrain,
+}
 
 #[derive(Debug)]
 enum RenderState {
@@ -51,6 +65,14 @@ struct SimpleVelloApp {
 
     /// The grid of cells to render
     grid: Array2D<i32>,
+    /// Logical width and height of one cell, controlled with the mouse wheel.
+    tile_size: f64,
+    /// Pixel offset from the centered grid position, controlled by dragging.
+    pan_offset: (f64, f64),
+    is_panning: bool,
+    last_cursor_position: Option<winit::dpi::PhysicalPosition<f64>>,
+    /// The ruleset that determines how cell states are visualized.
+    ruleset: Ruleset,
     /// Grid snapshots produced by the simulator.
     updates: Receiver<Array2D<i32>>,
 }
@@ -62,11 +84,9 @@ impl ApplicationHandler for SimpleVelloApp {
         };
 
         // Get the winit window cached in a previous Suspended event or else create a new window
-        let window = cached_window
-            .take()
-            .unwrap_or_else(|| {
-                create_winit_window(event_loop, self.grid.row_len(), self.grid.column_len())
-            });
+        let window = cached_window.take().unwrap_or_else(|| {
+            create_winit_window(event_loop, self.grid.row_len(), self.grid.column_len())
+        });
 
         // Create a vello Surface
         let size = window.inner_size();
@@ -147,6 +167,61 @@ impl ApplicationHandler for SimpleVelloApp {
                 }
             }
 
+            // Scroll up to zoom in and down to zoom out. The simulation grid is unchanged.
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scroll_steps = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y as f64,
+                    MouseScrollDelta::PixelDelta(position) => position.y / 50.0,
+                };
+
+                if scroll_steps != 0.0 {
+                    let old_tile_size = self.tile_size;
+                    let new_tile_size = (old_tile_size * ZOOM_FACTOR.powf(scroll_steps))
+                        .clamp(MIN_TILE_SIZE, MAX_TILE_SIZE);
+                    let viewport_width = surface.config.width as f64;
+                    let viewport_height = surface.config.height as f64;
+                    let grid_width = self.grid.column_len() as f64;
+                    let grid_height = self.grid.row_len() as f64;
+
+                    // Keep the current viewport center fixed in grid coordinates while zooming.
+                    let old_offset_x =
+                        (viewport_width - grid_width * old_tile_size) / 2.0 + self.pan_offset.0;
+                    let old_offset_y =
+                        (viewport_height - grid_height * old_tile_size) / 2.0 + self.pan_offset.1;
+                    let center_cell_x = (viewport_width / 2.0 - old_offset_x) / old_tile_size;
+                    let center_cell_y = (viewport_height / 2.0 - old_offset_y) / old_tile_size;
+                    let new_offset_x = (viewport_width - grid_width * new_tile_size) / 2.0;
+                    let new_offset_y = (viewport_height - grid_height * new_tile_size) / 2.0;
+
+                    self.tile_size = new_tile_size;
+                    self.pan_offset.0 =
+                        viewport_width / 2.0 - new_offset_x - center_cell_x * new_tile_size;
+                    self.pan_offset.1 =
+                        viewport_height / 2.0 - new_offset_y - center_cell_y * new_tile_size;
+                    window.request_redraw();
+                }
+            }
+
+            // Hold the left mouse button and drag to move the grid around the viewport.
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Left,
+                ..
+            } => {
+                self.is_panning = state == ElementState::Pressed;
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                if self.is_panning {
+                    if let Some(last_position) = self.last_cursor_position {
+                        self.pan_offset.0 += position.x - last_position.x;
+                        self.pan_offset.1 += position.y - last_position.y;
+                        window.request_redraw();
+                    }
+                }
+                self.last_cursor_position = Some(position);
+            }
+
             // This is where all the rendering happens
             WindowEvent::RedrawRequested => {
                 if !*valid_surface {
@@ -158,7 +233,15 @@ impl ApplicationHandler for SimpleVelloApp {
                 self.scene.reset();
 
                 // Re-add the objects to draw to the scene.
-                draw_grid(&mut self.scene, &self.grid);
+                draw_grid(
+                    &mut self.scene,
+                    &self.grid,
+                    self.ruleset,
+                    self.tile_size,
+                    self.pan_offset,
+                    surface.config.width as f64,
+                    surface.config.height as f64,
+                );
 
                 // Get the window size
                 let width = surface.config.width;
@@ -223,7 +306,6 @@ impl ApplicationHandler for SimpleVelloApp {
                 device_handle.queue.submit([encoder.finish()]);
                 // Queue the texture to be presented on the surface
                 surface_texture.present();
-
             }
             _ => {}
         }
@@ -233,6 +315,7 @@ impl ApplicationHandler for SimpleVelloApp {
 pub fn run_renderer(
     initial_grid: Array2D<i32>,
     updates: Receiver<Array2D<i32>>,
+    ruleset: Ruleset,
 ) -> Result<()> {
     // Setup a bunch of state:
     let mut app = SimpleVelloApp {
@@ -241,6 +324,11 @@ pub fn run_renderer(
         state: RenderState::Suspended(None),
         scene: Scene::new(),
         grid: initial_grid,
+        tile_size: INITIAL_TILE_SIZE,
+        pan_offset: (0.0, 0.0),
+        is_panning: false,
+        last_cursor_position: None,
+        ruleset,
         updates,
     };
 
@@ -257,13 +345,19 @@ pub fn run_renderer(
 }
 
 /// Helper function that creates a Winit window and returns it (wrapped in an Arc for sharing between threads)
-fn create_winit_window(
-    event_loop: &ActiveEventLoop,
-    rows: usize,
-    columns: usize,
-) -> Arc<Window> {
-    let width = columns as f64 * TILE_SIZE;
-    let height = rows as f64 * TILE_SIZE;
+fn create_winit_window(event_loop: &ActiveEventLoop, rows: usize, columns: usize) -> Arc<Window> {
+    let desired_width = columns as f64 * INITIAL_TILE_SIZE;
+    let desired_height = rows as f64 * INITIAL_TILE_SIZE;
+    let (width, height) = event_loop
+        .primary_monitor()
+        .map(|monitor| {
+            let screen_size = monitor.size();
+            let scale_factor = monitor.scale_factor();
+            let max_width = screen_size.width as f64 / scale_factor * MAX_INITIAL_WINDOW_USAGE;
+            let max_height = screen_size.height as f64 / scale_factor * MAX_INITIAL_WINDOW_USAGE;
+            (desired_width.min(max_width), desired_height.min(max_height))
+        })
+        .unwrap_or((desired_width, desired_height));
 
     let attr = Window::default_attributes()
         .with_inner_size(LogicalSize::new(width, height))
@@ -281,21 +375,51 @@ fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface<'_>)
     .expect("Couldn't create renderer")
 }
 
-fn draw_grid(scene: &mut Scene, grid: &Array2D<i32>){
-    let alive_color = Color::new([0.0, 1.0, 0.0, 1.0]);
+/**
+ * NOTE: This function was coded by me.
+ */
+fn draw_grid(
+    scene: &mut Scene,
+    grid: &Array2D<i32>,
+    ruleset: Ruleset,
+    tile_size: f64,
+    pan_offset: (f64, f64),
+    viewport_width: f64,
+    viewport_height: f64,
+) {
+    let alive_color_conway = Color::new([0.0, 1.0, 0.0, 1.0]); // Green
+
+    let alive_color_brian = Color::new([1.0, 1.0, 0.0, 1.0]); // Yellow
+    let alive_color_brian_dying = Color::new([1.0, 0.5, 0.0, 1.0]); // Orange
+    let dead_color_brian = Color::new([1.0, 0.0, 0.0, 0.3]); // Red
+    let grid_width = grid.column_len() as f64 * tile_size;
+    let grid_height = grid.row_len() as f64 * tile_size;
+    let offset_x = (viewport_width - grid_width) / 2.0 + pan_offset.0;
+    let offset_y = (viewport_height - grid_height) / 2.0 + pan_offset.1;
 
     for row in 0..grid.row_len() {
         for col in 0..grid.column_len() {
-            if grid.get(row, col) != Some(&1) {
-                continue;
-            }
+            let cell_state = *grid.get(row, col).unwrap_or(&0);
+            let color = match (ruleset, cell_state) {
+                (Ruleset::BriansBrain, 1) => alive_color_brian,
+                (Ruleset::BriansBrain, 2) => alive_color_brian_dying,
+                (Ruleset::BriansBrain, 3) => dead_color_brian,
+                (Ruleset::BriansBrain, _) => continue,
+                (_, 1) => alive_color_conway,
+                (_, _) => continue,
+            };
 
-            let x = col as f64 * TILE_SIZE;
-            let y = row as f64 * TILE_SIZE;
-            let rect = Rect::new(x, y, x + TILE_SIZE, y + TILE_SIZE);
+            let x = offset_x + col as f64 * tile_size;
+            let y = offset_y + row as f64 * tile_size;
+            let rect = Rect::new(x, y, x + tile_size, y + tile_size);
 
-            scene.fill(vello::peniko::Fill::NonZero, Affine::IDENTITY,
-                alive_color, None, &rect);
+            scene.fill(
+                vello::peniko::Fill::NonZero,
+                Affine::IDENTITY,
+                color,
+                None,
+                &rect,
+            );
         }
     }
 }
